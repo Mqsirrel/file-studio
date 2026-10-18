@@ -1,0 +1,22 @@
+[Desktop Entry]
+Type=Service
+ServiceTypes=KonqPopupMenu/Plugin
+MimeType=application/zip;application/x-tar;application/x-compressed-tar;application/x-bzip-compressed-tar;application/x-xz-compressed-tar;
+Actions=OpenStudio;ExtractArc;MetadataArc;
+X-KDE-Submenu=File Studio · Archive
+Icon=package-x-generic
+
+[Desktop Action OpenStudio]
+Name=Open Archive in File Studio…
+Icon=package-x-generic
+Exec=/home/albraa/.local/bin/convertwheel --studio %F
+
+[Desktop Action ExtractArc]
+Name=Extract into Clean Subfolder
+Icon=archive-extract
+Exec=/home/albraa/.local/bin/convertwheel --extract %F
+
+[Desktop Action MetadataArc]
+Name=Inspect Contained Files…
+Icon=document-properties
+Exec=/home/albraa/.local/bin/convertwheel --metadata %u

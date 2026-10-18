@@ -1,0 +1,32 @@
+[Desktop Entry]
+Type=Service
+ServiceTypes=KonqPopupMenu/Plugin
+MimeType=application/vnd.openxmlformats-officedocument.wordprocessingml.document;application/msword;application/vnd.oasis.opendocument.text;text/plain;text/markdown;text/rtf;text/csv;application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;application/vnd.openxmlformats-officedocument.presentationml.presentation;
+Actions=OpenStudio;CombineZip;ToPdf;ToDocx;ToTxt;
+X-KDE-Submenu=File Studio · Document
+Icon=x-office-document
+
+[Desktop Action OpenStudio]
+Name=Open Document in File Studio…
+Icon=x-office-document
+Exec=/home/albraa/.local/bin/convertwheel --studio %F
+
+[Desktop Action ToPdf]
+Name=Convert → PDF Document
+Icon=application-pdf
+Exec=/home/albraa/.local/bin/convertwheel --to PDF %F
+
+[Desktop Action ToDocx]
+Name=Convert → Word (.docx)
+Icon=x-office-document
+Exec=/home/albraa/.local/bin/convertwheel --to DOCX %F
+
+[Desktop Action ToTxt]
+Name=Extract Plain Text → TXT
+Icon=text-plain
+Exec=/home/albraa/.local/bin/convertwheel --to TXT %F
+
+[Desktop Action CombineZip]
+Name=Combine into ZIP Archive
+Icon=archive-insert
+Exec=/home/albraa/.local/bin/convertwheel --zip %F

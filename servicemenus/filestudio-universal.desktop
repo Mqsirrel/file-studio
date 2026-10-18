@@ -1,0 +1,17 @@
+[Desktop Entry]
+Type=Service
+ServiceTypes=KonqPopupMenu/Plugin
+MimeType=all/allfiles;
+Actions=OpenStudio;CombineZip;
+X-KDE-Submenu=File Studio
+Icon=applications-graphics
+
+[Desktop Action OpenStudio]
+Name=Open in File Studio…
+Icon=applications-graphics
+Exec=/home/albraa/.local/bin/convertwheel --studio %F
+
+[Desktop Action CombineZip]
+Name=Combine into ZIP Archive
+Icon=archive-insert
+Exec=/home/albraa/.local/bin/convertwheel --zip %F

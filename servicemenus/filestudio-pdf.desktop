@@ -1,0 +1,52 @@
+[Desktop Entry]
+Type=Service
+ServiceTypes=KonqPopupMenu/Plugin
+MimeType=application/pdf;
+Actions=OpenStudio;CombineZip;CompressPdf;RenderPng;ExtractTxt;ToDocx;MetadataPdf;AnnotatePdf;RedactPdf;
+X-KDE-Submenu=File Studio · PDF
+Icon=application-pdf
+
+[Desktop Action OpenStudio]
+Name=Open PDF in File Studio…
+Icon=application-pdf
+Exec=/home/albraa/.local/bin/convertwheel --studio %F
+
+[Desktop Action CompressPdf]
+Name=Compress PDF (MuPDF Engine)
+Icon=archive-insert
+Exec=/home/albraa/.local/bin/convertwheel --compress %F
+
+[Desktop Action RenderPng]
+Name=Render Pages → PNG (200 DPI)
+Icon=image-x-generic
+Exec=/home/albraa/.local/bin/convertwheel --to PNG %F
+
+[Desktop Action ExtractTxt]
+Name=Extract Plain Text → TXT
+Icon=text-plain
+Exec=/home/albraa/.local/bin/convertwheel --to TXT %F
+
+[Desktop Action ToDocx]
+Name=Convert → Word (.docx)
+Icon=x-office-document
+Exec=/home/albraa/.local/bin/convertwheel --to DOCX %F
+
+[Desktop Action MetadataPdf]
+Name=Inspect & Scrub PDF Metadata…
+Icon=document-properties
+Exec=/home/albraa/.local/bin/convertwheel --metadata %u
+
+[Desktop Action AnnotatePdf]
+Name=Annotate Cover Page…
+Icon=draw-freehand
+Exec=/home/albraa/.local/bin/convertwheel --annotate %u
+
+[Desktop Action RedactPdf]
+Name=Redact Cover Page…
+Icon=edit-clear
+Exec=/home/albraa/.local/bin/convertwheel --redact %u
+
+[Desktop Action CombineZip]
+Name=Combine into ZIP Archive
+Icon=archive-insert
+Exec=/home/albraa/.local/bin/convertwheel --zip %F

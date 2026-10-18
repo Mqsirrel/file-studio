@@ -1,0 +1,16 @@
+[Unit]
+Description=File Studio (Obsidian & Cobalt Slate) – Intelligent File Studio & Converter
+After=graphical-session.target
+
+[Service]
+Type=simple
+Environment=QT_QPA_PLATFORM=xcb
+Environment=XDG_CURRENT_DESKTOP=KDE
+Environment=QT_QPA_PLATFORMTHEME=kde
+Environment=VIPS_WARNING=0
+ExecStart=%h/.local/bin/convertwheel
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "file-studio"
+version = "2.0.0"
+description = "Structured Obsidian & Cobalt Slate intelligent file studio & converter for Linux (KDE Plasma 6)"
+readme = "README.md"
+license = { text = "MIT" }
+authors = [{ name = "Mqsirrel" }]
+requires-python = ">=3.10"
+keywords = ["kde", "plasma", "file-converter", "image-studio", "pdf", "pymupdf", "libvips", "dolphin"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Environment :: X11 Applications :: Qt",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Topic :: Desktop Environment :: K Desktop Environment (KDE)",
+    "Topic :: Multimedia :: Graphics :: Graphics Conversion",
+    "Topic :: Utilities",
+]
+dependencies = [
+    "PyQt6>=6.4.0",
+    "pymupdf>=1.23.0",
+    "pyvips>=2.2.0",
+    "pillow>=10.0.0",
+    "pillow-heif>=0.14.0",
+    "python-docx>=1.1.0",
+    "pypdf>=4.0.0",
+]
+
+[project.scripts]
+file-studio = "convertwheel.app:main"
+convertwheel = "convertwheel.app:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["convertwheel*"]

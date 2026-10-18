@@ -1,0 +1,27 @@
+# Python bytecode and virtual environment
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.venv/
+venv/
+ENV/
+env/
+
+# Packaging
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# IDE & OS
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store
+
+# Temporary outputs
+/tmp/
+*.zip
+*.log

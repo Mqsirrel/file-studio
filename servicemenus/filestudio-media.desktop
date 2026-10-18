@@ -1,0 +1,47 @@
+[Desktop Entry]
+Type=Service
+ServiceTypes=KonqPopupMenu/Plugin
+MimeType=video/mp4;video/x-matroska;video/webm;video/quicktime;video/x-msvideo;audio/mpeg;audio/wav;audio/x-wav;audio/flac;audio/ogg;audio/mp4;audio/aac;
+Actions=OpenStudio;CombineZip;CompressMedia;ToMp4;ToMp3;ToGif;ToWav;MetadataMedia;
+X-KDE-Submenu=File Studio · Media
+Icon=applications-multimedia
+
+[Desktop Action OpenStudio]
+Name=Open Media in File Studio…
+Icon=applications-multimedia
+Exec=/home/albraa/.local/bin/convertwheel --studio %F
+
+[Desktop Action CompressMedia]
+Name=Compress Media (Smart Shrink)
+Icon=archive-insert
+Exec=/home/albraa/.local/bin/convertwheel --compress %F
+
+[Desktop Action ToMp4]
+Name=Convert → MP4 (H.264)
+Icon=video-x-generic
+Exec=/home/albraa/.local/bin/convertwheel --to MP4 %F
+
+[Desktop Action ToMp3]
+Name=Convert / Extract Audio → MP3
+Icon=audio-x-generic
+Exec=/home/albraa/.local/bin/convertwheel --to MP3 %F
+
+[Desktop Action ToGif]
+Name=Convert Video → Animated GIF
+Icon=image-x-generic
+Exec=/home/albraa/.local/bin/convertwheel --to GIF %F
+
+[Desktop Action ToWav]
+Name=Convert → WAV (Lossless PCM)
+Icon=audio-x-generic
+Exec=/home/albraa/.local/bin/convertwheel --to WAV %F
+
+[Desktop Action MetadataMedia]
+Name=Inspect & Strip Media Tags…
+Icon=document-properties
+Exec=/home/albraa/.local/bin/convertwheel --metadata %u
+
+[Desktop Action CombineZip]
+Name=Combine into ZIP Archive
+Icon=archive-insert
+Exec=/home/albraa/.local/bin/convertwheel --zip %F
