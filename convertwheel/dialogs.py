@@ -11,6 +11,7 @@ libraries (`Pillow` + `pillow-heif`, `PyMuPDF` / `fitz`, and `libvips`) — zero
 from __future__ import annotations
 
 import math
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from PIL import Image, ImageEnhance, ImageOps
@@ -249,6 +250,12 @@ class SegmentedBar(QWidget):
         self.update()
         if emit:
             self.changed.emit(self.items[self.idx][1])
+
+    def set_value(self, val: object, emit: bool = False):
+        for i, (_, v) in enumerate(self.items):
+            if v == val:
+                self.set_index(i, emit=emit)
+                break
 
     def _cell_rect(self, i: int) -> QRectF:
         n = max(1, len(self.items))
@@ -1167,18 +1174,95 @@ class EditDialog(_SlateDialog):
 
 
 # ============================================================================== 4. Annotate & Redact Studios
+@dataclass
+class CanvasItem:
+    """Vector markup item supporting Canva-like hit testing, move, and handle resize."""
+    kind: str  # "box", "arrow", "pen", "highlight", "pixelate", "blur", "blackout"
+    color: QColor
+    stroke_width: float
+    rect: QRectF = field(default_factory=QRectF)
+    p0: QPointF = field(default_factory=QPointF)
+    p1: QPointF = field(default_factory=QPointF)
+    points: list[QPointF] = field(default_factory=list)
+
+    def clone(self) -> CanvasItem:
+        return CanvasItem(
+            self.kind,
+            QColor(self.color),
+            self.stroke_width,
+            QRectF(self.rect),
+            QPointF(self.p0),
+            QPointF(self.p1),
+            [QPointF(p) for p in self.points],
+        )
+
+    def bounds(self) -> QRectF:
+        if self.kind in ("box", "pixelate", "blur", "blackout"):
+            return self.rect.normalized()
+        elif self.kind == "arrow":
+            return QRectF(self.p0, self.p1).normalized()
+        elif self.points:
+            xs = [p.x() for p in self.points]
+            ys = [p.y() for p in self.points]
+            return QRectF(min(xs), min(ys), max(1.0, max(xs) - min(xs)), max(1.0, max(ys) - min(ys)))
+        return QRectF()
+
+    def translate(self, dx: float, dy: float, max_w: float, max_h: float):
+        if self.kind in ("box", "pixelate", "blur", "blackout"):
+            r = self.rect.normalized()
+            nx = max(0.0, min(r.x() + dx, max_w - r.width()))
+            ny = max(0.0, min(r.y() + dy, max_h - r.height()))
+            self.rect = QRectF(nx, ny, r.width(), r.height())
+        elif self.kind == "arrow":
+            self.p0 = QPointF(
+                max(0.0, min(self.p0.x() + dx, max_w)),
+                max(0.0, min(self.p0.y() + dy, max_h)),
+            )
+            self.p1 = QPointF(
+                max(0.0, min(self.p1.x() + dx, max_w)),
+                max(0.0, min(self.p1.y() + dy, max_h)),
+            )
+        elif self.points:
+            self.points = [
+                QPointF(max(0.0, min(p.x() + dx, max_w)), max(0.0, min(p.y() + dy, max_h)))
+                for p in self.points
+            ]
+
+
+def _dist_to_segment(p: QPointF, a: QPointF, b: QPointF) -> float:
+    dx, dy = b.x() - a.x(), b.y() - a.y()
+    l2 = dx * dx + dy * dy
+    if l2 <= 0.0001:
+        return math.hypot(p.x() - a.x(), p.y() - a.y())
+    t = max(0.0, min(1.0, ((p.x() - a.x()) * dx + (p.y() - a.y()) * dy) / l2))
+    proj_x = a.x() + t * dx
+    proj_y = a.y() + t * dy
+    return math.hypot(p.x() - proj_x, p.y() - proj_y)
+
+
 class _MarkupCanvas(QWidget):
+    item_selected = pyqtSignal(object)
+
     def __init__(self, img: QImage, mode: str = "annotate"):
         super().__init__()
         self.orig = img
         self.mode = mode
-        self.tool = "pen" if mode == "annotate" else "pixelate"
+        self.tool = "box" if mode == "annotate" else "pixelate"
         self.color = QColor("#3B82F6")
-        self.stroke_width = 5
-        self.actions: list[tuple] = []
-        self._current = None
+        self.stroke_width = 5.0
+        self.items: list[CanvasItem] = []
+        self.selected_item: CanvasItem | None = None
+        self._drawing_item: CanvasItem | None = None
+        self._drag_mode: str | None = None
+        self._drag_start_screen: QPointF | None = None
+        self._drag_start_item: CanvasItem | None = None
+        self._pill_del_rect: QRectF | None = None
+        self._pill_dup_rect: QRectF | None = None
+
         self.setMinimumSize(400, 300)
         self.setCursor(Qt.CursorShape.CrossCursor)
+        self.setMouseTracking(True)
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
 
     def _view(self) -> tuple[QRectF, float]:
         m = 12
@@ -1194,38 +1278,284 @@ class _MarkupCanvas(QWidget):
         y = max(0.0, min((pt.y() - v.y()) / s, float(self.orig.height())))
         return QPointF(x, y)
 
+    def _to_screen(self, pt: QPointF) -> QPointF:
+        v, s = self._view()
+        return QPointF(v.x() + pt.x() * s, v.y() + pt.y() * s)
+
+    def _to_screen_rect(self, r: QRectF) -> QRectF:
+        v, s = self._view()
+        return QRectF(v.x() + r.x() * s, v.y() + r.y() * s, r.width() * s, r.height() * s)
+
     def undo(self):
-        if self.actions:
-            self.actions.pop()
+        if self.items:
+            popped = self.items.pop()
+            if self.selected_item is popped:
+                self.selected_item = self.items[-1] if self.items else None
+                self.item_selected.emit(self.selected_item)
             self.update()
 
     def clear_all(self):
-        self.actions.clear()
+        self.items.clear()
+        self.selected_item = None
+        self.item_selected.emit(None)
         self.update()
+
+    def delete_selected(self):
+        if self.selected_item is not None and self.selected_item in self.items:
+            self.items.remove(self.selected_item)
+            self.selected_item = self.items[-1] if self.items else None
+            self.item_selected.emit(self.selected_item)
+            self.update()
+
+    def duplicate_selected(self):
+        if self.selected_item is not None:
+            clone = self.selected_item.clone()
+            clone.translate(16.0, 16.0, float(self.orig.width()), float(self.orig.height()))
+            self.items.append(clone)
+            self.selected_item = clone
+            self.item_selected.emit(clone)
+            self.update()
+
+    def keyPressEvent(self, e):
+        if e.key() in (Qt.Key.Key_Delete, Qt.Key.Key_Backspace):
+            self.delete_selected()
+            e.accept()
+            return
+        if e.key() == Qt.Key.Key_D and e.modifiers() & Qt.KeyboardModifier.ControlModifier:
+            self.duplicate_selected()
+            e.accept()
+            return
+        if e.key() == Qt.Key.Key_Z and e.modifiers() & Qt.KeyboardModifier.ControlModifier:
+            self.undo()
+            e.accept()
+            return
+        if e.key() == Qt.Key.Key_Escape:
+            self.selected_item = None
+            self.item_selected.emit(None)
+            self.update()
+            e.accept()
+            return
+        # Nudge selected item with arrow keys
+        if self.selected_item is not None:
+            step = 10.0 if e.modifiers() & Qt.KeyboardModifier.ShiftModifier else 1.0
+            dx, dy = 0.0, 0.0
+            if e.key() == Qt.Key.Key_Left:
+                dx = -step
+            elif e.key() == Qt.Key.Key_Right:
+                dx = step
+            elif e.key() == Qt.Key.Key_Up:
+                dy = -step
+            elif e.key() == Qt.Key.Key_Down:
+                dy = step
+            if dx != 0.0 or dy != 0.0:
+                self.selected_item.translate(dx, dy, float(self.orig.width()), float(self.orig.height()))
+                self.update()
+                e.accept()
+                return
+        super().keyPressEvent(e)
+
+    def _handles_for(self, item: CanvasItem) -> dict[str, QPointF]:
+        if item.kind in ("box", "pixelate", "blur", "blackout"):
+            sr = self._to_screen_rect(item.rect.normalized())
+            return {
+                "tl": sr.topLeft(),
+                "tr": sr.topRight(),
+                "bl": sr.bottomLeft(),
+                "br": sr.bottomRight(),
+                "t": QPointF(sr.center().x(), sr.top()),
+                "b": QPointF(sr.center().x(), sr.bottom()),
+                "l": QPointF(sr.left(), sr.center().y()),
+                "r": QPointF(sr.right(), sr.center().y()),
+            }
+        elif item.kind == "arrow":
+            return {
+                "p0": self._to_screen(item.p0),
+                "p1": self._to_screen(item.p1),
+            }
+        return {}
+
+    def _hit_test(self, pos: QPointF) -> tuple[CanvasItem | None, str | None]:
+        # 1. Handles of selected item
+        if self.selected_item is not None:
+            handles = self._handles_for(self.selected_item)
+            for h_name, h_pt in handles.items():
+                if math.hypot(pos.x() - h_pt.x(), pos.y() - h_pt.y()) <= 9.0:
+                    return self.selected_item, h_name
+
+        # 2. Check all items in reverse order (topmost first)
+        for item in reversed(self.items):
+            if item.kind in ("box", "pixelate", "blur", "blackout"):
+                sr = self._to_screen_rect(item.rect.normalized())
+                if item.kind == "box":
+                    if sr.adjusted(-6, -6, 6, 6).contains(pos):
+                        return item, "move"
+                else: # Redaction
+                    if sr.contains(pos):
+                        return item, "move"
+            elif item.kind == "arrow":
+                s0 = self._to_screen(item.p0)
+                s1 = self._to_screen(item.p1)
+                if _dist_to_segment(pos, s0, s1) <= 9.0:
+                    return item, "move"
+            elif item.points:
+                for i in range(len(item.points) - 1):
+                    s0 = self._to_screen(item.points[i])
+                    s1 = self._to_screen(item.points[i + 1])
+                    if _dist_to_segment(pos, s0, s1) <= 9.0:
+                        return item, "move"
+        return None, None
 
     def mousePressEvent(self, e):
         if e.button() == Qt.MouseButton.LeftButton:
-            pt = self._to_img(e.position())
+            pos = e.position()
+
+            # 1. Floating pill button clicks
+            if self.selected_item is not None:
+                if self._pill_del_rect and self._pill_del_rect.contains(pos):
+                    self.delete_selected()
+                    return
+                if self._pill_dup_rect and self._pill_dup_rect.contains(pos):
+                    self.duplicate_selected()
+                    return
+
+            # 2. Hit test existing item or handle
+            item, handle = self._hit_test(pos)
+            if item is not None:
+                self.selected_item = item
+                self._drag_mode = handle
+                self._drag_start_screen = pos
+                self._drag_start_item = item.clone()
+                self.item_selected.emit(item)
+                self.update()
+                return
+
+            # 3. Empty canvas clicked
+            pt = self._to_img(pos)
+            if self.tool == "select":
+                self.selected_item = None
+                self.item_selected.emit(None)
+                self.update()
+                return
+
+            # Start drawing new item
+            self.selected_item = None
+            self.item_selected.emit(None)
             if self.tool in ("pen", "highlight"):
-                self._current = (self.tool, QColor(self.color), self.stroke_width, [pt])
-            else:
-                self._current = (self.tool, QColor(self.color), self.stroke_width, pt, pt)
+                self._drawing_item = CanvasItem(self.tool, self.color, self.stroke_width, points=[pt])
+            elif self.tool == "arrow":
+                self._drawing_item = CanvasItem(self.tool, self.color, self.stroke_width, p0=pt, p1=pt)
+            else: # box, pixelate, blur, blackout
+                self._drawing_item = CanvasItem(self.tool, self.color, self.stroke_width, rect=QRectF(pt, pt))
             self.update()
 
     def mouseMoveEvent(self, e):
-        if self._current is not None:
-            pt = self._to_img(e.position())
-            if self._current[0] in ("pen", "highlight"):
-                self._current[3].append(pt)
-            else:
-                self._current = (*self._current[:4], pt)
+        pos = e.position()
+        v, s = self._view()
+        img_w, img_h = float(self.orig.width()), float(self.orig.height())
+
+        # A. Dragging / Resizing selected item
+        if self._drag_mode is not None and self.selected_item is not None and self._drag_start_item is not None:
+            dx = (pos.x() - self._drag_start_screen.x()) / s
+            dy = (pos.y() - self._drag_start_screen.y()) / s
+
+            if self._drag_mode == "move":
+                self.selected_item.rect = QRectF(self._drag_start_item.rect)
+                self.selected_item.p0 = QPointF(self._drag_start_item.p0)
+                self.selected_item.p1 = QPointF(self._drag_start_item.p1)
+                self.selected_item.points = [QPointF(p) for p in self._drag_start_item.points]
+                self.selected_item.translate(dx, dy, img_w, img_h)
+
+            elif self.selected_item.kind in ("box", "pixelate", "blur", "blackout"):
+                orig_r = self._drag_start_item.rect.normalized()
+                r = QRectF(orig_r)
+                MIN_S = 8.0
+                if "l" in self._drag_mode:
+                    r.setLeft(max(0.0, min(orig_r.left() + dx, orig_r.right() - MIN_S)))
+                if "r" in self._drag_mode:
+                    r.setRight(min(img_w, max(orig_r.right() + dx, orig_r.left() + MIN_S)))
+                if "t" in self._drag_mode:
+                    r.setTop(max(0.0, min(orig_r.top() + dy, orig_r.bottom() - MIN_S)))
+                if "b" in self._drag_mode:
+                    r.setBottom(min(img_h, max(orig_r.bottom() + dy, orig_r.top() + MIN_S)))
+                self.selected_item.rect = r.normalized()
+
+            elif self.selected_item.kind == "arrow":
+                if self._drag_mode == "p0":
+                    self.selected_item.p0 = QPointF(
+                        max(0.0, min(self._drag_start_item.p0.x() + dx, img_w)),
+                        max(0.0, min(self._drag_start_item.p0.y() + dy, img_h)),
+                    )
+                elif self._drag_mode == "p1":
+                    self.selected_item.p1 = QPointF(
+                        max(0.0, min(self._drag_start_item.p1.x() + dx, img_w)),
+                        max(0.0, min(self._drag_start_item.p1.y() + dy, img_h)),
+                    )
             self.update()
+            return
+
+        # B. Drawing new item
+        if self._drawing_item is not None:
+            pt = self._to_img(pos)
+            if self._drawing_item.kind in ("pen", "highlight"):
+                self._drawing_item.points.append(pt)
+            elif self._drawing_item.kind == "arrow":
+                self._drawing_item.p1 = pt
+            else: # box, pixelate, blur, blackout
+                start_p = self._drawing_item.rect.topLeft()
+                self._drawing_item.rect = QRectF(start_p, pt)
+            self.update()
+            return
+
+        # C. Cursor feedback on hover
+        if self.selected_item is not None:
+            if (self._pill_del_rect and self._pill_del_rect.contains(pos)) or \
+               (self._pill_dup_rect and self._pill_dup_rect.contains(pos)):
+                self.setCursor(Qt.CursorShape.PointingHandCursor)
+                return
+
+        item, handle = self._hit_test(pos)
+        if handle:
+            cursors = {
+                "tl": Qt.CursorShape.SizeFDiagCursor, "br": Qt.CursorShape.SizeFDiagCursor,
+                "tr": Qt.CursorShape.SizeBDiagCursor, "bl": Qt.CursorShape.SizeBDiagCursor,
+                "t": Qt.CursorShape.SizeVerCursor, "b": Qt.CursorShape.SizeVerCursor,
+                "l": Qt.CursorShape.SizeHorCursor, "r": Qt.CursorShape.SizeHorCursor,
+                "p0": Qt.CursorShape.PointingHandCursor, "p1": Qt.CursorShape.PointingHandCursor,
+                "move": Qt.CursorShape.SizeAllCursor,
+            }
+            self.setCursor(cursors.get(handle, Qt.CursorShape.ArrowCursor))
+        else:
+            if self.tool == "select":
+                self.setCursor(Qt.CursorShape.ArrowCursor)
+            else:
+                self.setCursor(Qt.CursorShape.CrossCursor)
 
     def mouseReleaseEvent(self, e):
-        if e.button() == Qt.MouseButton.LeftButton and self._current is not None:
-            self.actions.append(self._current)
-            self._current = None
-            self.update()
+        if e.button() == Qt.MouseButton.LeftButton:
+            if self._drawing_item is not None:
+                item = self._drawing_item
+                self._drawing_item = None
+                valid = False
+                if item.kind in ("pen", "highlight") and len(item.points) >= 2:
+                    valid = True
+                elif item.kind == "arrow" and math.hypot(item.p1.x() - item.p0.x(), item.p1.y() - item.p0.y()) >= 5.0:
+                    valid = True
+                elif item.kind in ("box", "pixelate", "blur", "blackout"):
+                    item.rect = item.rect.normalized()
+                    if item.rect.width() >= 4.0 and item.rect.height() >= 4.0:
+                        valid = True
+
+                if valid:
+                    self.items.append(item)
+                    self.selected_item = item
+                    self.item_selected.emit(item)
+                self.update()
+
+            if self._drag_mode is not None:
+                self._drag_mode = None
+                self._drag_start_screen = None
+                self._drag_start_item = None
+                self.update()
 
     def render_final(self) -> QImage:
         out = self.orig.copy()
@@ -1234,13 +1564,13 @@ class _MarkupCanvas(QWidget):
         p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
         scale_factor = max(1.0, max(out.width(), out.height()) / 900.0)
 
-        all_items = list(self.actions) + ([self._current] if self._current else [])
+        all_items = list(self.items) + ([self._drawing_item] if self._drawing_item else [])
         for item in all_items:
-            kind = item[0]
-            col = QColor(item[1])
-            sw = item[2] * scale_factor
+            kind = item.kind
+            col = QColor(item.color)
+            sw = item.stroke_width * scale_factor
             if kind in ("pen", "highlight"):
-                pts = item[3]
+                pts = item.points
                 if len(pts) < 2:
                     continue
                 if kind == "highlight":
@@ -1253,12 +1583,12 @@ class _MarkupCanvas(QWidget):
                     path.lineTo(pt)
                 p.drawPath(path)
             elif kind == "box":
-                r = QRectF(item[3], item[4]).normalized()
+                r = item.rect.normalized()
                 p.setPen(QPen(col, sw, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin))
                 p.setBrush(Qt.BrushStyle.NoBrush)
                 p.drawRoundedRect(r, 4 * scale_factor, 4 * scale_factor)
             elif kind == "arrow":
-                p0, p1 = item[3], item[4]
+                p0, p1 = item.p0, item.p1
                 p.setPen(QPen(col, sw, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin))
                 p.drawLine(p0, p1)
                 ang = math.atan2(p1.y() - p0.y(), p1.x() - p0.x())
@@ -1268,7 +1598,7 @@ class _MarkupCanvas(QWidget):
                                  p1.y() + math.sin(ang + da) * head)
                     p.drawLine(p1, hp)
             elif kind in ("pixelate", "blur", "blackout"):
-                r = QRectF(item[3], item[4]).normalized().intersected(QRectF(0, 0, out.width(), out.height()))
+                r = item.rect.normalized().intersected(QRectF(0, 0, out.width(), out.height()))
                 ir = r.toRect()
                 if ir.width() < 4 or ir.height() < 4:
                     continue
@@ -1306,26 +1636,122 @@ class _MarkupCanvas(QWidget):
         p.setPen(QPen(QColor(BORDER), 1.0))
         p.setBrush(QColor(BG_CARD))
         p.drawRoundedRect(QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5), 10, 10)
+
         v, _ = self._view()
         rendered = self.render_final()
         p.drawImage(v, rendered)
 
+        # Canva-style Selection Frame & Handles
+        self._pill_del_rect = None
+        self._pill_dup_rect = None
+
+        if self.selected_item is not None:
+            sr = self._to_screen_rect(self.selected_item.bounds())
+
+            # 1. Selection Bounding Box Outline
+            p.setPen(QPen(QColor(ACCENT), 1.6, Qt.PenStyle.SolidLine))
+            p.setBrush(Qt.BrushStyle.NoBrush)
+            sel_box = sr.adjusted(-2.0, -2.0, 2.0, 2.0)
+            p.drawRect(sel_box)
+
+            # 2. Handles
+            p.setBrush(QColor("#FFFFFF"))
+            p.setPen(QPen(QColor(ACCENT), 1.8))
+            handles = self._handles_for(self.selected_item)
+            for h_name, pt in handles.items():
+                if len(h_name) == 2 and h_name not in ("p0", "p1"):
+                    hr = QRectF(pt.x() - 4.5, pt.y() - 4.5, 9.0, 9.0)
+                    p.drawRoundedRect(hr, 2.5, 2.5)
+                elif h_name in ("t", "b"):
+                    hr = QRectF(pt.x() - 8.0, pt.y() - 3.0, 16.0, 6.0)
+                    p.drawRoundedRect(hr, 3.0, 3.0)
+                elif h_name in ("l", "r"):
+                    hr = QRectF(pt.x() - 3.0, pt.y() - 8.0, 6.0, 16.0)
+                    p.drawRoundedRect(hr, 3.0, 3.0)
+                elif h_name in ("p0", "p1"):
+                    p.drawEllipse(pt, 5.0, 5.0)
+
+            # 3. Canva Floating Action Pill Capsule
+            kind_title = self.selected_item.kind.capitalize()
+            b = self.selected_item.bounds()
+            if self.selected_item.kind in ("box", "pixelate", "blur", "blackout"):
+                dim_str = f"{kind_title} {int(b.width())}×{int(b.height())}"
+            else:
+                dim_str = kind_title
+
+            pill_w = 154.0
+            pill_h = 26.0
+            cx = sel_box.center().x()
+            cy = sel_box.top() - 18.0
+            if cy - pill_h / 2.0 < v.top() + 6.0:
+                cy = sel_box.bottom() + 18.0
+
+            pill_r = QRectF(cx - pill_w / 2.0, cy - pill_h / 2.0, pill_w, pill_h)
+
+            if pill_r.left() < v.left():
+                pill_r.moveLeft(v.left())
+            if pill_r.right() > v.right():
+                pill_r.moveRight(v.right())
+
+            # Draw capsule
+            p.setPen(QPen(QColor(BORDER), 1.0))
+            p.setBrush(QColor("#1A1D24"))
+            p.drawRoundedRect(pill_r, 6.0, 6.0)
+
+            # Label text
+            f_pill = QFont()
+            f_pill.setPixelSize(10)
+            f_pill.setWeight(QFont.Weight.Bold)
+            p.setFont(f_pill)
+            p.setPen(QColor(TEXT_SEC))
+            p.drawText(
+                QRectF(pill_r.left() + 8.0, pill_r.top(), pill_w - 56.0, pill_h),
+                Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+                dim_str,
+            )
+
+            # Divider
+            p.setPen(QPen(QColor(BORDER), 1.0))
+            p.drawLine(QPointF(pill_r.right() - 44.0, pill_r.top() + 5.0),
+                       QPointF(pill_r.right() - 44.0, pill_r.bottom() - 5.0))
+
+            # Duplicate button ⧉
+            self._pill_dup_rect = QRectF(pill_r.right() - 42.0, pill_r.top() + 3.0, 18.0, 20.0)
+            p.setPen(QColor(TEXT_MUTED))
+            f_sym = QFont()
+            f_sym.setPixelSize(11)
+            p.setFont(f_sym)
+            p.drawText(self._pill_dup_rect, Qt.AlignmentFlag.AlignCenter, "⧉")
+
+            # Delete button ✕
+            self._pill_del_rect = QRectF(pill_r.right() - 22.0, pill_r.top() + 3.0, 18.0, 20.0)
+            p.setPen(QColor("#F87171"))
+            p.drawText(self._pill_del_rect, Qt.AlignmentFlag.AlignCenter, "✕")
+
 
 class AnnotateStudio(StudioPanel):
-    TOOLS = [("Pen", "pen"), ("Highlight", "highlight"), ("Arrow", "arrow"), ("Box", "box")]
+    TOOLS = [("Select", "select"), ("Box", "box"), ("Arrow", "arrow"), ("Pen", "pen"), ("Highlight", "highlight")]
     COLORS = ["#3B82F6", "#EF4444", "#F59E0B", "#10B981", "#A855F7", "#FFFFFF", "#0F172A"]
 
     def __init__(self, path: Path):
         super().__init__("Annotate & Markup", path)
         self.canvas = _MarkupCanvas(load_image(path), mode="annotate")
+        self.canvas.item_selected.connect(self._on_item_selected)
         self.root.addWidget(self.canvas, 1)
 
         trow = QHBoxLayout()
         trow.addWidget(QLabel("Markup Tool"))
         trow.addStretch(1)
-        self.tseg = SegmentedBar(self.TOOLS)
-        self.tseg.changed.connect(lambda t: setattr(self.canvas, "tool", t))
+        self.tseg = SegmentedBar(self.TOOLS, current=1)  # Default to Box
+        self.tseg.changed.connect(self._on_tool_changed)
         trow.addWidget(self.tseg)
+
+        del_btn = QPushButton("🗑 Delete")
+        del_btn.setObjectName("toolBtn")
+        del_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        del_btn.clicked.connect(self.canvas.delete_selected)
+        trow.addWidget(del_btn)
+
         undo_btn = QPushButton("↶ Undo")
         undo_btn.setObjectName("toolBtn")
         undo_btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -1337,24 +1763,60 @@ class AnnotateStudio(StudioPanel):
         crow.addWidget(QLabel("Colour & Stroke"))
         crow.addStretch(1)
         self.cgroup = QButtonGroup(self)
+        self.color_buttons: list[_SwatchButton] = []
         for i, c in enumerate(self.COLORS):
             b = _SwatchButton(c, "solid", checked=(i == 0))
             b.setFixedSize(26, 26)
-            b.clicked.connect(lambda _=False, col=c: setattr(self.canvas, "color", QColor(col)))
+            b.clicked.connect(lambda _=False, col=c: self._set_color(col))
             self.cgroup.addButton(b)
+            self.color_buttons.append(b)
             crow.addWidget(b)
-        s = QSlider(Qt.Orientation.Horizontal)
-        s.setRange(2, 16)
-        s.setValue(5)
-        s.setFixedWidth(110)
-        s.valueChanged.connect(lambda v: setattr(self.canvas, "stroke_width", v))
+
+        self.stroke_slider = QSlider(Qt.Orientation.Horizontal)
+        self.stroke_slider.setRange(2, 16)
+        self.stroke_slider.setValue(5)
+        self.stroke_slider.setFixedWidth(110)
+        self.stroke_slider.valueChanged.connect(self._set_stroke)
         crow.addSpacing(8)
-        crow.addWidget(s)
+        crow.addWidget(self.stroke_slider)
         self.root.addLayout(crow)
 
         reset, save = self.build_footer("Save Annotated Image")
         reset.clicked.connect(self.canvas.clear_all)
         save.clicked.connect(self._save)
+
+    def _on_tool_changed(self, t: str):
+        self.canvas.tool = t
+        if self.canvas.selected_item is not None and t in ("box", "arrow", "pen", "highlight"):
+            self.canvas.selected_item.kind = t
+            self.canvas.update()
+
+    def _set_color(self, c: str):
+        col = QColor(c)
+        self.canvas.color = col
+        if self.canvas.selected_item is not None:
+            self.canvas.selected_item.color = col
+            self.canvas.update()
+
+    def _set_stroke(self, v: int):
+        self.canvas.stroke_width = float(v)
+        if self.canvas.selected_item is not None:
+            self.canvas.selected_item.stroke_width = float(v)
+            self.canvas.update()
+
+    def _on_item_selected(self, item: CanvasItem | None):
+        if item is not None:
+            if item.kind in ("box", "arrow", "pen", "highlight"):
+                self.tseg.set_value(item.kind)
+            self.stroke_slider.blockSignals(True)
+            self.stroke_slider.setValue(int(item.stroke_width))
+            self.stroke_slider.blockSignals(False)
+
+            hex_c = item.color.name().upper()
+            for b in self.color_buttons:
+                if str(b.value).upper() == hex_c:
+                    b.setChecked(True)
+                    break
 
     def _save(self):
         out = self.canvas.render_final()
@@ -1378,19 +1840,27 @@ class AnnotateDialog(_SlateDialog):
 
 
 class RedactStudio(StudioPanel):
-    MODES = [("Pixelate", "pixelate"), ("Gaussian Blur", "blur"), ("Blackout", "blackout")]
+    MODES = [("Select", "select"), ("Pixelate", "pixelate"), ("Gaussian Blur", "blur"), ("Blackout", "blackout")]
 
     def __init__(self, path: Path):
         super().__init__("Redact Sensitive", path)
         self.canvas = _MarkupCanvas(load_image(path), mode="redact")
+        self.canvas.item_selected.connect(self._on_item_selected)
         self.root.addWidget(self.canvas, 1)
 
         row = QHBoxLayout()
         row.addWidget(QLabel("Redaction Style"))
         row.addStretch(1)
-        self.seg = SegmentedBar(self.MODES)
-        self.seg.changed.connect(lambda t: setattr(self.canvas, "tool", t))
+        self.seg = SegmentedBar(self.MODES, current=1)  # Default to Pixelate
+        self.seg.changed.connect(self._on_mode_changed)
         row.addWidget(self.seg)
+
+        del_btn = QPushButton("🗑 Delete")
+        del_btn.setObjectName("toolBtn")
+        del_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        del_btn.clicked.connect(self.canvas.delete_selected)
+        row.addWidget(del_btn)
+
         undo_btn = QPushButton("↶ Undo")
         undo_btn.setObjectName("toolBtn")
         undo_btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -1398,7 +1868,7 @@ class RedactStudio(StudioPanel):
         row.addWidget(undo_btn)
         self.root.addLayout(row)
 
-        hint = QLabel("Drag across any sensitive text, faces, or keys above to sanitize permanently.")
+        hint = QLabel("Drag to redact. Click any redaction to move, resize, or switch style like Canva.")
         hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
         hint.setStyleSheet(f"color: {TEXT_MUTED}; font-size: 11px;")
         self.root.addWidget(hint)
@@ -1406,6 +1876,16 @@ class RedactStudio(StudioPanel):
         reset, save = self.build_footer("Save Redacted Copy")
         reset.clicked.connect(self.canvas.clear_all)
         save.clicked.connect(self._save)
+
+    def _on_mode_changed(self, m: str):
+        self.canvas.tool = m
+        if self.canvas.selected_item is not None and m in ("pixelate", "blur", "blackout"):
+            self.canvas.selected_item.kind = m
+            self.canvas.update()
+
+    def _on_item_selected(self, item: CanvasItem | None):
+        if item is not None and item.kind in ("pixelate", "blur", "blackout"):
+            self.seg.set_value(item.kind)
 
     def _save(self):
         out = self.canvas.render_final()

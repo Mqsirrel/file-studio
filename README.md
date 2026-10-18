@@ -60,10 +60,10 @@ Interactive tools run directly inside the main rectangular window via an embedde
 | <img src="screenshots/filestudio_3_backdrop_embedded.png" width="400" /> | <img src="screenshots/filestudio_4_crop_embedded.png" width="400" /> |
 | *Deep Cobalt Aurora mesh gradients, custom padding, rounded corners, drop shadows, and aspect ratio locks.* | *Rule-of-thirds grid, Cobalt Blue corner handles, aspect ratio presets (16:9, 1:1, 9:16), and exact pixel inputs.* |
 
-| Annotate & Markup | Redact Sensitive Information |
+| Annotate & Markup (Canva-Style Drag & Edit) | Redact Sensitive (Canva-Style Move & Resize) |
 | :---: | :---: |
 | <img src="screenshots/filestudio_5_annotate_embedded.png" width="400" /> | <img src="screenshots/filestudio_6_redact_embedded.png" width="400" /> |
-| *Vector arrows, highlight markers, callout boxes, and freehand pen drawing.* | *Permanent pixelation, Gaussian blur, and solid blackout sanitization for tokens, keys, and personal data.* |
+| *Canva-like selection handles, drag-to-move, live colour & stroke editing, floating action pills, and keyboard shortcuts.* | *Click & drag to redact with live pixelation, blur, or blackout; click any redaction to move, resize, duplicate, or switch styles.* |
 
 | Adjust & Transform | Metadata & Properties |
 | :---: | :---: |
