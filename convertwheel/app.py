@@ -46,6 +46,7 @@ from . import icons
 from .dialogs import (
     ACCENT, ACCENT_HOVER, BG_CARD, BG_ELEV, BG_HOVER, BG_MAIN,
     BORDER, DANGER, EMERALD, STUDIO_QSS, TEXT_MUTED, TEXT_PRI, TEXT_SEC,
+    FONT_SANS, FONT_DISPLAY, FONT_MONO, ui_font,
     AddBgDialog, AnnotateDialog, AnnotateStudio, BackdropStudio,
     CropDialog, CropStudio, EditDialog, EditStudio,
     MetadataDialog, MetadataStudio, RedactDialog, RedactStudio,
@@ -231,6 +232,7 @@ class SlateToast(QWidget):
     def paintEvent(self, _):
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        p.setRenderHint(QPainter.RenderHint.TextAntialiasing)
         m = self.MARGIN
         card = QRectF(m, m, self.W, self.H)
 
@@ -256,10 +258,8 @@ class SlateToast(QWidget):
         icons.draw_icon(p, icon_name, badge_r.center(), 16.0, accent_col)
 
         # Title & Subtitle
-        f = QFont()
-        f.setPixelSize(12)
-        f.setWeight(QFont.Weight.Bold)
-        p.setFont(f)
+        f_title = ui_font(12, QFont.Weight.Bold, display=True)
+        p.setFont(f_title)
         p.setPen(QColor(TEXT_PRI))
         p.drawText(
             QRectF(m + 58, m + 13, self.W - 88, 18),
@@ -267,9 +267,8 @@ class SlateToast(QWidget):
             self.title,
         )
 
-        f.setPixelSize(11)
-        f.setWeight(QFont.Weight.Medium)
-        p.setFont(f)
+        f_sub = ui_font(11, QFont.Weight.Medium)
+        p.setFont(f_sub)
         p.setPen(QColor(TEXT_SEC))
         p.drawText(
             QRectF(m + 58, m + 31, self.W - 72, 18),
@@ -405,6 +404,7 @@ class ToolCard(QWidget):
     def paintEvent(self, _):
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        p.setRenderHint(QPainter.RenderHint.TextAntialiasing)
         r = QRectF(0.5, 0.5, self.width() - 1.0, self.height() - 1.0)
 
         accent = QColor(self.spec.accent)
@@ -428,10 +428,8 @@ class ToolCard(QWidget):
         icons.draw_icon(p, self.spec.icon, ib.center(), 17.0, accent)
 
         # Title
-        f = QFont()
-        f.setPixelSize(12)
-        f.setWeight(QFont.Weight.Bold)
-        p.setFont(f)
+        f_title = ui_font(12, QFont.Weight.Bold, display=True)
+        p.setFont(f_title)
         p.setPen(QColor(TEXT_PRI))
         p.drawText(
             QRectF(56.0, 10.0, self.width() - 66.0, 18.0),
@@ -440,9 +438,8 @@ class ToolCard(QWidget):
         )
 
         # Subtitle
-        f.setPixelSize(11)
-        f.setWeight(QFont.Weight.Normal)
-        p.setFont(f)
+        f_sub = ui_font(11, QFont.Weight.Normal)
+        p.setFont(f_sub)
         p.setPen(QColor(TEXT_SEC))
         p.drawText(
             QRectF(56.0, 29.0, self.width() - 64.0, 17.0),
@@ -486,6 +483,7 @@ class FormatChip(QWidget):
     def paintEvent(self, _):
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        p.setRenderHint(QPainter.RenderHint.TextAntialiasing)
         r = QRectF(0.5, 0.5, self.width() - 1.0, self.height() - 1.0)
 
         accent = QColor(self.spec.accent)
@@ -515,9 +513,7 @@ class FormatChip(QWidget):
         text_x = ib.right() + 10.0
 
         # Title font
-        f_title = QFont()
-        f_title.setPixelSize(12)
-        f_title.setWeight(QFont.Weight.Bold)
+        f_title = ui_font(12, QFont.Weight.Bold, display=True)
         p.setFont(f_title)
         fm_title = QFontMetrics(f_title)
         title_str = self.spec.fmt
@@ -532,9 +528,7 @@ class FormatChip(QWidget):
 
         # Category Tag Pill beside the format name
         tag_x = text_x + title_w + 6.0
-        f_tag = QFont()
-        f_tag.setPixelSize(9)
-        f_tag.setWeight(QFont.Weight.Bold)
+        f_tag = ui_font(9, QFont.Weight.Bold, mono=True)
         p.setFont(f_tag)
         fm_tag = QFontMetrics(f_tag)
         tag_str = self.spec.type_badge
@@ -558,9 +552,7 @@ class FormatChip(QWidget):
             )
 
         # 3. Description / Technical spec line
-        f_desc = QFont()
-        f_desc.setPixelSize(10)
-        f_desc.setWeight(QFont.Weight.Medium)
+        f_desc = ui_font(10, QFont.Weight.Medium)
         p.setFont(f_desc)
         p.setPen(QColor("#93C5FD" if self.hover else TEXT_MUTED))
         desc_text = self.spec.desc
@@ -575,9 +567,7 @@ class FormatChip(QWidget):
 
         # 4. Subtle action arrow on hover on the far right
         if self.hover:
-            f_arrow = QFont()
-            f_arrow.setPixelSize(12)
-            f_arrow.setWeight(QFont.Weight.Bold)
+            f_arrow = ui_font(12, QFont.Weight.Bold)
             p.setFont(f_arrow)
             p.setPen(accent)
             p.drawText(
@@ -643,7 +633,7 @@ class FileStudioWindow(QWidget):
         self.back_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.back_btn.setStyleSheet(
             f"QPushButton {{ background: {BG_ELEV}; border: 1px solid {BORDER}; border-radius: 6px; "
-            f"padding: 4px 10px; color: {TEXT_PRI}; font-size: 11px; font-weight: 700; }}"
+            f"padding: 4px 10px; color: {TEXT_PRI}; font-family: {FONT_SANS}; font-size: 11px; font-weight: 700; }}"
             f"QPushButton:hover {{ background: {ACCENT}; border-color: {ACCENT}; color: white; }}"
         )
         self.back_btn.clicked.connect(self.show_command_deck)
@@ -652,12 +642,12 @@ class FileStudioWindow(QWidget):
 
         self.brand_lbl = QLabel("FILE STUDIO")
         self.brand_lbl.setStyleSheet(
-            f"color: {TEXT_MUTED}; font-size: 11px; font-weight: 800; letter-spacing: 1.1px;"
+            f"color: {TEXT_MUTED}; font-family: {FONT_DISPLAY}; font-size: 11px; font-weight: 800; letter-spacing: 1.2px;"
         )
         tb.addWidget(self.brand_lbl)
 
         self.studio_crumb_lbl = QLabel("")
-        self.studio_crumb_lbl.setStyleSheet(f"color: {ACCENT}; font-size: 12px; font-weight: 700;")
+        self.studio_crumb_lbl.setStyleSheet(f"color: {ACCENT}; font-family: {FONT_DISPLAY}; font-size: 12px; font-weight: 700;")
         self.studio_crumb_lbl.hide()
         tb.addWidget(self.studio_crumb_lbl)
 
@@ -667,7 +657,7 @@ class FileStudioWindow(QWidget):
         open_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         open_btn.setStyleSheet(
             f"QPushButton {{ background: {BG_ELEV}; border: 1px solid {BORDER}; border-radius: 6px; "
-            f"padding: 4px 10px; color: {TEXT_SEC}; font-size: 11px; font-weight: 600; }}"
+            f"padding: 4px 10px; color: {TEXT_SEC}; font-family: {FONT_SANS}; font-size: 11px; font-weight: 600; }}"
             f"QPushButton:hover {{ background: {BG_HOVER}; color: {TEXT_PRI}; border-color: #3E4556; }}"
         )
         open_btn.clicked.connect(lambda: self.pick_files())
@@ -678,7 +668,7 @@ class FileStudioWindow(QWidget):
         close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         close_btn.setStyleSheet(
             f"QPushButton {{ background: {BG_ELEV}; border: 1px solid {BORDER}; border-radius: 6px; "
-            f"color: {TEXT_SEC}; font-weight: 700; }}"
+            f"color: {TEXT_SEC}; font-family: {FONT_SANS}; font-weight: 700; font-size: 12px; }}"
             f"QPushButton:hover {{ background: {DANGER}; border-color: {DANGER}; color: white; }}"
         )
         close_btn.clicked.connect(self.collapse)
@@ -704,24 +694,24 @@ class FileStudioWindow(QWidget):
         title_row.setSpacing(8)
 
         self.filename_lbl = QLabel("Drop or select a file")
-        self.filename_lbl.setStyleSheet(f"color: {TEXT_PRI}; font-size: 14px; font-weight: 700;")
+        self.filename_lbl.setStyleSheet(f"color: {TEXT_PRI}; font-family: {FONT_DISPLAY}; font-size: 14px; font-weight: 700;")
         title_row.addWidget(self.filename_lbl)
 
         self.badge_lbl = QLabel("READY")
         self.badge_lbl.setStyleSheet(
             f"background: {BG_ELEV}; color: {ACCENT}; border: 1px solid {BORDER}; "
-            f"border-radius: 5px; padding: 2px 7px; font-size: 10px; font-weight: 800; letter-spacing: 0.6px;"
+            f"border-radius: 5px; padding: 2px 7px; font-family: {FONT_MONO}; font-size: 10px; font-weight: 700; letter-spacing: 0.6px;"
         )
         title_row.addWidget(self.badge_lbl)
         title_row.addStretch(1)
         meta_col.addLayout(title_row)
 
         self.specs_lbl = QLabel("Images · PDFs · Office Docs · Video · Audio · Archives")
-        self.specs_lbl.setStyleSheet(f"color: {TEXT_SEC}; font-size: 12px; font-weight: 500;")
+        self.specs_lbl.setStyleSheet(f"color: {TEXT_SEC}; font-family: {FONT_SANS}; font-size: 12px; font-weight: 500;")
         meta_col.addWidget(self.specs_lbl)
 
         self.path_lbl = QLabel("")
-        self.path_lbl.setStyleSheet(f"color: {TEXT_MUTED}; font-size: 11px;")
+        self.path_lbl.setStyleSheet(f"color: {TEXT_MUTED}; font-family: {FONT_MONO}; font-size: 11px;")
         meta_col.addWidget(self.path_lbl)
 
         hw.addLayout(meta_col, 1)
@@ -834,14 +824,14 @@ class FileStudioWindow(QWidget):
         fb.addWidget(self.status_dot)
 
         self.status_lbl = QLabel("Ready · Native Pillow 13 + PyMuPDF + libvips + FFmpeg engines")
-        self.status_lbl.setStyleSheet(f"color: {TEXT_SEC}; font-size: 11px; font-weight: 600;")
+        self.status_lbl.setStyleSheet(f"color: {TEXT_SEC}; font-family: {FONT_SANS}; font-size: 11px; font-weight: 600;")
         fb.addWidget(self.status_lbl, 1)
 
         self.use_result_btn = QPushButton("Load Result in Studio")
         self.use_result_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.use_result_btn.setStyleSheet(
             f"QPushButton {{ background: {BG_ELEV}; border: 1px solid {BORDER}; border-radius: 6px; "
-            f"padding: 4px 10px; color: {TEXT_PRI}; font-size: 11px; font-weight: 600; }}"
+            f"padding: 4px 10px; color: {TEXT_PRI}; font-family: {FONT_SANS}; font-size: 11px; font-weight: 600; }}"
             f"QPushButton:hover {{ background: {ACCENT}; border-color: {ACCENT}; color: white; }}"
         )
         self.use_result_btn.clicked.connect(self._load_last_result)
@@ -852,7 +842,7 @@ class FileStudioWindow(QWidget):
         self.reveal_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.reveal_btn.setStyleSheet(
             f"QPushButton {{ background: {EMERALD}; border: 1px solid #34D399; border-radius: 6px; "
-            f"padding: 4px 11px; color: #FFFFFF; font-size: 11px; font-weight: 700; }}"
+            f"padding: 4px 11px; color: #FFFFFF; font-family: {FONT_SANS}; font-size: 11px; font-weight: 700; }}"
             f"QPushButton:hover {{ background: #059669; }}"
         )
         self.reveal_btn.clicked.connect(self._reveal_last_result)
@@ -962,12 +952,12 @@ class FileStudioWindow(QWidget):
             if cat_name == getattr(self, "_selected_format_cat", "ALL"):
                 btn.setStyleSheet(
                     f"QPushButton {{ background: {ACCENT}; color: #FFFFFF; border: 1px solid {ACCENT}; "
-                    f"border-radius: 10px; padding: 2px 9px; font-size: 10px; font-weight: 700; }}"
+                    f"border-radius: 10px; padding: 2px 9px; font-family: {FONT_SANS}; font-size: 10px; font-weight: 700; }}"
                 )
             else:
                 btn.setStyleSheet(
                     f"QPushButton {{ background: {BG_ELEV}; color: {TEXT_MUTED}; border: 1px solid {BORDER}; "
-                    f"border-radius: 10px; padding: 2px 9px; font-size: 10px; font-weight: 600; }}"
+                    f"border-radius: 10px; padding: 2px 9px; font-family: {FONT_SANS}; font-size: 10px; font-weight: 600; }}"
                     f"QPushButton:hover {{ background: {BG_HOVER}; color: {TEXT_PRI}; border-color: #3E4556; }}"
                 )
 
@@ -1010,7 +1000,7 @@ class FileStudioWindow(QWidget):
 
         self.badge_lbl.setStyleSheet(
             f"background: {BG_ELEV}; color: {accent_hex}; border: 1px solid {BORDER}; "
-            f"border-radius: 5px; padding: 2px 8px; font-size: 10px; font-weight: 800; letter-spacing: 0.6px;"
+            f"border-radius: 5px; padding: 2px 8px; font-family: {FONT_MONO}; font-size: 10px; font-weight: 800; letter-spacing: 0.6px;"
         )
 
         # Populate Smart Studio Tools Grid (2 columns)
@@ -1186,14 +1176,14 @@ class FileStudioWindow(QWidget):
 
     def _show_inline_busy(self, what: str, count: int):
         self.status_dot.setStyleSheet(f"color: {ACCENT}; font-size: 11px;")
-        self.status_lbl.setStyleSheet(f"color: {TEXT_PRI}; font-size: 11px; font-weight: 600;")
+        self.status_lbl.setStyleSheet(f"color: {TEXT_PRI}; font-family: {FONT_SANS}; font-size: 11px; font-weight: 600;")
         self.status_lbl.setText(f"{what} ({count} file{'s' if count > 1 else ''})…")
         self.use_result_btn.hide()
         self.reveal_btn.hide()
 
     def _show_inline_done(self, what: str, outs: list[Path], src_paths: list[Path]):
         self.status_dot.setStyleSheet(f"color: {EMERALD}; font-size: 11px;")
-        self.status_lbl.setStyleSheet(f"color: {EMERALD}; font-size: 11px; font-weight: 700;")
+        self.status_lbl.setStyleSheet(f"color: {EMERALD}; font-family: {FONT_SANS}; font-size: 11px; font-weight: 700;")
         out = outs[0]
         if "ZIP" in what or "archive" in what.lower():
             n = len(src_paths)
@@ -1222,7 +1212,7 @@ class FileStudioWindow(QWidget):
 
     def _show_inline_error(self, what: str, err: str):
         self.status_dot.setStyleSheet(f"color: {DANGER}; font-size: 11px;")
-        self.status_lbl.setStyleSheet(f"color: {DANGER}; font-size: 11px; font-weight: 700;")
+        self.status_lbl.setStyleSheet(f"color: {DANGER}; font-family: {FONT_SANS}; font-size: 11px; font-weight: 700;")
         self.status_lbl.setText(f"{what} failed: {err.splitlines()[0][:55]}")
         self.use_result_btn.hide()
         self.reveal_btn.hide()
@@ -1373,6 +1363,7 @@ class EdgeDockPill(QWidget):
                 border-radius: 8px;
                 padding: 5px;
                 color: {TEXT_PRI};
+                font-family: {FONT_SANS};
                 font-size: 12px;
                 font-weight: 500;
             }}
@@ -1520,6 +1511,7 @@ def main():
     app.setDesktopFileName("convertwheel")
     app.setQuitOnLastWindowClosed(False)
     app.setWindowIcon(QIcon.fromTheme("applications-graphics"))
+    app.setFont(ui_font(12, QFont.Weight.Normal))
 
     dock = EdgeDockPill()
     studio = FileStudioWindow(dock_pill=dock)

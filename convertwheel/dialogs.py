@@ -52,28 +52,64 @@ TEXT_PRI = "#F3F4F6"
 TEXT_SEC = "#9CA3AF"
 TEXT_MUTED = "#6B7280"
 
+# --------------------------------------------------------------------------- Typography System
+FONT_SANS = '"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans", sans-serif'
+FONT_DISPLAY = '"Inter Display", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+FONT_MONO = '"JetBrainsMono Nerd Font", "JetBrains Mono", "Hack", "Cascadia Code", "Consolas", monospace'
+
+
+def ui_font(
+    size: int = 12,
+    weight: QFont.Weight = QFont.Weight.Normal,
+    display: bool = False,
+    mono: bool = False,
+) -> QFont:
+    """Create a high-fidelity QFont configured with subpixel antialiasing and optimal hinting."""
+    f = QFont()
+    if mono:
+        f.setFamilies(["JetBrainsMono Nerd Font", "JetBrains Mono", "Hack", "Cascadia Code", "Consolas", "monospace"])
+        f.setStyleHint(QFont.StyleHint.Monospace, QFont.StyleStrategy.PreferAntialias)
+    elif display:
+        f.setFamilies(["Inter Display", "Inter", "-apple-system", "Segoe UI", "sans-serif"])
+        f.setStyleHint(QFont.StyleHint.SansSerif, QFont.StyleStrategy.PreferAntialias)
+    else:
+        f.setFamilies(["Inter", "Segoe UI", "Noto Sans", "sans-serif"])
+        f.setStyleHint(QFont.StyleHint.SansSerif, QFont.StyleStrategy.PreferAntialias)
+
+    f.setPixelSize(size)
+    f.setWeight(weight)
+    f.setHintingPreference(QFont.HintingPreference.PreferFullHinting)
+    return f
+
+
 STUDIO_QSS = f"""
 QWidget {{
     color: {TEXT_PRI};
-    font-family: "Inter", "Noto Sans", sans-serif;
+    font-family: {FONT_SANS};
     font-size: 12px;
 }}
 QLabel {{
     color: {TEXT_SEC};
+    font-family: {FONT_SANS};
     font-size: 12px;
     font-weight: 500;
     background: transparent;
 }}
 QLabel#valueLabel {{
     color: {TEXT_PRI};
+    font-family: {FONT_MONO};
     font-size: 12px;
     font-weight: 600;
 }}
 QLabel#sectionTitle {{
     color: {TEXT_MUTED};
+    font-family: {FONT_DISPLAY};
     font-size: 11px;
     font-weight: 700;
     letter-spacing: 0.8px;
+}}
+QPushButton {{
+    font-family: {FONT_SANS};
 }}
 QPushButton#resetBtn {{
     background: {BG_ELEV};
@@ -81,6 +117,7 @@ QPushButton#resetBtn {{
     border-radius: 7px;
     padding: 6px 14px;
     color: {TEXT_SEC};
+    font-family: {FONT_SANS};
     font-size: 12px;
     font-weight: 600;
 }}
@@ -95,6 +132,7 @@ QPushButton#primaryBtn {{
     border-radius: 7px;
     padding: 6px 18px;
     color: #FFFFFF;
+    font-family: {FONT_SANS};
     font-size: 12px;
     font-weight: 600;
 }}
@@ -107,6 +145,7 @@ QPushButton#toolBtn {{
     border-radius: 7px;
     padding: 5px 12px;
     color: {TEXT_PRI};
+    font-family: {FONT_SANS};
     font-size: 12px;
     font-weight: 600;
 }}
@@ -122,6 +161,7 @@ QLineEdit#pxInput {{
     color: {TEXT_PRI};
     selection-background-color: {ACCENT};
     selection-color: white;
+    font-family: {FONT_MONO};
     font-size: 12px;
     font-weight: 600;
 }}
@@ -285,14 +325,13 @@ class SegmentedBar(QWidget):
     def paintEvent(self, _):
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        p.setRenderHint(QPainter.RenderHint.TextAntialiasing)
         outer = QRectF(0.5, 0.5, self.width() - 1, self.height() - 1)
         p.setBrush(QColor(BG_CARD))
         p.setPen(QPen(QColor(BORDER), 1.0))
         p.drawRoundedRect(outer, 7.0, 7.0)
 
-        f = QFont()
-        f.setPixelSize(11)
-        f.setWeight(QFont.Weight.DemiBold)
+        f = ui_font(11, QFont.Weight.DemiBold)
         p.setFont(f)
 
         for i, (label, _) in enumerate(self.items):
@@ -379,7 +418,7 @@ class _SlateDialog(QDialog):
         hl.setSpacing(10)
 
         title_lbl = QLabel(f"{panel.title}  ·  {panel.path.name}")
-        title_lbl.setStyleSheet(f"color: {TEXT_PRI}; font-size: 13px; font-weight: 700;")
+        title_lbl.setStyleSheet(f"color: {TEXT_PRI}; font-size: 13px; font-weight: 700; font-family: {FONT_DISPLAY};")
         hl.addWidget(title_lbl)
         hl.addStretch(1)
 
@@ -1632,6 +1671,7 @@ class _MarkupCanvas(QWidget):
     def paintEvent(self, _):
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        p.setRenderHint(QPainter.RenderHint.TextAntialiasing)
         p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
         p.setPen(QPen(QColor(BORDER), 1.0))
         p.setBrush(QColor(BG_CARD))
@@ -1699,9 +1739,7 @@ class _MarkupCanvas(QWidget):
             p.drawRoundedRect(pill_r, 6.0, 6.0)
 
             # Label text
-            f_pill = QFont()
-            f_pill.setPixelSize(10)
-            f_pill.setWeight(QFont.Weight.Bold)
+            f_pill = ui_font(10, QFont.Weight.Bold)
             p.setFont(f_pill)
             p.setPen(QColor(TEXT_SEC))
             p.drawText(
@@ -1718,8 +1756,7 @@ class _MarkupCanvas(QWidget):
             # Duplicate button ⧉
             self._pill_dup_rect = QRectF(pill_r.right() - 42.0, pill_r.top() + 3.0, 18.0, 20.0)
             p.setPen(QColor(TEXT_MUTED))
-            f_sym = QFont()
-            f_sym.setPixelSize(11)
+            f_sym = ui_font(11, QFont.Weight.Normal)
             p.setFont(f_sym)
             p.drawText(self._pill_dup_rect, Qt.AlignmentFlag.AlignCenter, "⧉")
 
@@ -1922,10 +1959,10 @@ class MetadataStudio(StudioPanel):
         grid.setVerticalSpacing(7)
         for i, (k, v) in enumerate(rows):
             kl = QLabel(k)
-            kl.setStyleSheet(f"color: {TEXT_SEC}; font-weight: 600; border: none;")
+            kl.setStyleSheet(f"color: {TEXT_SEC}; font-weight: 600; border: none; font-family: {FONT_SANS};")
             vl = QLabel(v)
             vl.setObjectName("valueLabel")
-            vl.setStyleSheet(f"color: {TEXT_PRI}; font-weight: 600; border: none;")
+            vl.setStyleSheet(f"color: {TEXT_PRI}; font-weight: 600; border: none; font-family: {FONT_MONO};")
             grid.addWidget(kl, i, 0, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
             grid.addWidget(vl, i, 1, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         grid.setColumnStretch(1, 1)
