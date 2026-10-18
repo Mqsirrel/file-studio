@@ -105,13 +105,90 @@ FORMAT_META: dict[str, str] = {
     "ZIP": "Compressed Archive",
 }
 
+@dataclass
+class FormatSpec:
+    fmt: str
+    category: str        # "image", "document", "spreadsheet", "presentation", "video", "audio", "archive"
+    category_label: str  # "Image", "Document", "Spreadsheet", "Presentation", "Video", "Audio", "Archive"
+    type_badge: str      # "IMG", "PDF", "DOC", "VID", "AUD", "ZIP", "SHEET", "SLIDE"
+    icon: str            # "kind_image", "kind_pdf", "kind_doc", "kind_sheet", "kind_slide", "kind_video", "kind_audio", "kind_archive"
+    desc: str            # Concise technical subtitle
+    accent: str          # Format-specific or category accent hex
+
+
+FORMAT_SPECS: dict[str, FormatSpec] = {
+    # Image formats
+    "WEBP": FormatSpec("WEBP", "image", "Image", "IMG", "kind_image", "Modern Web · Small", "#10B981"),
+    "PNG": FormatSpec("PNG", "image", "Image", "IMG", "kind_image", "Lossless · Alpha", "#38BDF8"),
+    "JPG": FormatSpec("JPG", "image", "Image", "IMG", "kind_image", "Universal · Compact", "#F59E0B"),
+    "AVIF": FormatSpec("AVIF", "image", "Image", "IMG", "kind_image", "Next-Gen · Tiny", "#8B5CF6"),
+    "HEIC": FormatSpec("HEIC", "image", "Image", "IMG", "kind_image", "Apple HEIF", "#EC4899"),
+    "TIFF": FormatSpec("TIFF", "image", "Image", "IMG", "kind_image", "Print · Lossless", "#6366F1"),
+    "BMP": FormatSpec("BMP", "image", "Image", "IMG", "kind_image", "Uncompressed", "#64748B"),
+    "ICO": FormatSpec("ICO", "image", "Image", "ICON", "kind_image", "App Multi-Res Icon", "#F97316"),
+    "GIF": FormatSpec("GIF", "video", "Animation", "ANIM", "kind_video", "Animated Loop", "#EC4899"),
+
+    # Document & Text formats
+    "PDF": FormatSpec("PDF", "document", "Document", "PDF", "kind_pdf", "Portable Document", "#EF4444"),
+    "DOCX": FormatSpec("DOCX", "document", "Document", "DOC", "kind_doc", "Word Document", "#2563EB"),
+    "ODT": FormatSpec("ODT", "document", "Document", "DOC", "kind_doc", "OpenDocument", "#3B82F6"),
+    "TXT": FormatSpec("TXT", "document", "Document", "TEXT", "kind_doc", "Plain Text", "#94A3B8"),
+    "RTF": FormatSpec("RTF", "document", "Document", "DOC", "kind_doc", "Rich Text", "#64748B"),
+    "HTML": FormatSpec("HTML", "document", "Document", "WEB", "kind_doc", "Web Page", "#F97316"),
+
+    # Spreadsheets & Presentations
+    "XLSX": FormatSpec("XLSX", "spreadsheet", "Spreadsheet", "SHEET", "kind_sheet", "Excel Spreadsheet", "#10B981"),
+    "ODS": FormatSpec("ODS", "spreadsheet", "Spreadsheet", "SHEET", "kind_sheet", "OpenSpreadsheet", "#059669"),
+    "CSV": FormatSpec("CSV", "spreadsheet", "Spreadsheet", "DATA", "kind_sheet", "Comma-Separated Values", "#14B8A6"),
+    "PPTX": FormatSpec("PPTX", "presentation", "Presentation", "SLIDE", "kind_slide", "PowerPoint Presentation", "#EA580C"),
+    "ODP": FormatSpec("ODP", "presentation", "Presentation", "SLIDE", "kind_slide", "OpenPresentation", "#D97706"),
+
+    # Video formats
+    "MP4": FormatSpec("MP4", "video", "Video", "VID", "kind_video", "H.264 Universal Video", "#8B5CF6"),
+    "WEBM": FormatSpec("WEBM", "video", "Video", "VID", "kind_video", "VP9 Web Video", "#06B6D4"),
+    "MKV": FormatSpec("MKV", "video", "Video", "VID", "kind_video", "Matroska Container", "#6366F1"),
+    "MOV": FormatSpec("MOV", "video", "Video", "VID", "kind_video", "Apple QuickTime", "#A855F7"),
+    "AVI": FormatSpec("AVI", "video", "Video", "VID", "kind_video", "Legacy Audio-Video", "#64748B"),
+
+    # Audio formats
+    "MP3": FormatSpec("MP3", "audio", "Audio", "AUD", "kind_audio", "Universal Audio 192k", "#06B6D4"),
+    "WAV": FormatSpec("WAV", "audio", "Audio", "AUD", "kind_audio", "Uncompressed PCM Wave", "#0EA5E9"),
+    "FLAC": FormatSpec("FLAC", "audio", "Audio", "AUD", "kind_audio", "Lossless Master Audio", "#10B981"),
+    "M4A": FormatSpec("M4A", "audio", "Audio", "AUD", "kind_audio", "AAC High-Quality Audio", "#3B82F6"),
+    "OPUS": FormatSpec("OPUS", "audio", "Audio", "AUD", "kind_audio", "High-Efficiency Voice", "#8B5CF6"),
+    "OGG": FormatSpec("OGG", "audio", "Audio", "AUD", "kind_audio", "Ogg Vorbis Audio", "#F59E0B"),
+    "AAC": FormatSpec("AAC", "audio", "Audio", "AUD", "kind_audio", "Advanced Audio Coding", "#F43F5E"),
+
+    # Archive formats
+    "ZIP": FormatSpec("ZIP", "archive", "Archive", "ZIP", "kind_archive", "Compressed Archive", "#EAB308"),
+    "TAR": FormatSpec("TAR", "archive", "Archive", "TAR", "kind_archive", "POSIX Tar Archive", "#CA8A04"),
+}
+
+
+def format_spec(fmt: str) -> FormatSpec:
+    """Return rich FormatSpec with format icon, category, badge, and technical hint."""
+    u = fmt.upper()
+    if u in FORMAT_SPECS:
+        return FORMAT_SPECS[u]
+    return FormatSpec(
+        fmt=u,
+        category="misc",
+        category_label="Format",
+        type_badge=u[:4],
+        icon="bolt",
+        desc=FORMAT_META.get(u, "Convert Format"),
+        accent="#3B82F6",
+    )
+
+
 TARGETS: dict[str, list[str]] = {
-    "image": ["PNG", "JPG", "WEBP", "AVIF", "HEIC", "PDF", "DOCX", "TIFF", "BMP", "ICO"],
-    "pdf": ["DOCX", "PNG", "JPG", "TXT"],
+    # Ordered logically: native format types first, followed by cross-category exports (e.g. PDF/DOCX or Audio extract)
+    "image": ["WEBP", "PNG", "JPG", "AVIF", "HEIC", "TIFF", "BMP", "ICO", "PDF", "DOCX"],
+    "pdf": ["DOCX", "TXT", "PNG", "JPG"],
     "doc": ["PDF", "DOCX", "ODT", "TXT", "HTML", "RTF"],
     "sheet": ["PDF", "XLSX", "CSV", "ODS"],
     "slide": ["PDF", "PPTX", "PNG", "JPG", "ODP"],
-    "video": ["MP4", "GIF", "MP3", "WAV", "WEBM", "MKV", "MOV"],
+    "video": ["MP4", "WEBM", "MKV", "MOV", "GIF", "MP3", "WAV"],
     "audio": ["MP3", "WAV", "FLAC", "M4A", "OPUS", "OGG", "AAC"],
     "archive": ["ZIP"],
 }

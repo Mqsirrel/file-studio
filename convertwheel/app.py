@@ -31,13 +31,13 @@ from PyQt6.QtCore import (
     QSettings, QSize, Qt, QThreadPool, QTimer, pyqtSignal,
 )
 from PyQt6.QtGui import (
-    QAction, QBrush, QColor, QCursor, QFont, QGuiApplication, QIcon,
+    QAction, QBrush, QColor, QCursor, QFont, QFontMetrics, QGuiApplication, QIcon,
     QImage, QLinearGradient, QPainter, QPainterPath, QPen, QPixmap,
 )
 from PyQt6.QtNetwork import QLocalServer, QLocalSocket
 from PyQt6.QtWidgets import (
     QApplication, QFileDialog, QFrame, QGridLayout, QHBoxLayout,
-    QLabel, QMenu, QPushButton, QScrollArea, QSizePolicy,
+    QLabel, QLayout, QMenu, QPushButton, QScrollArea, QSizePolicy,
     QStackedWidget, QVBoxLayout, QWidget,
 )
 
@@ -67,11 +67,11 @@ KIND_ACCENTS: dict[str, str] = {
 }
 
 KIND_ICONS: dict[str, str] = {
-    "image": "add_image",
+    "image": "kind_image",
     "pdf": "kind_pdf",
     "doc": "kind_doc",
-    "sheet": "kind_doc",
-    "slide": "kind_doc",
+    "sheet": "kind_sheet",
+    "slide": "kind_slide",
     "video": "kind_video",
     "audio": "kind_audio",
     "archive": "kind_archive",
@@ -452,16 +452,21 @@ class ToolCard(QWidget):
 
 
 class FormatChip(QWidget):
-    """Structured rectangular format target button with format name + technical hint."""
+    """Structured rectangular format target card with format icon, category badge, and technical specs."""
     clicked = pyqtSignal(str)
 
-    def __init__(self, fmt: str, desc: str):
+    def __init__(self, spec: cv.FormatSpec | str, desc: str | None = None):
         super().__init__()
-        self.fmt = fmt
-        self.desc = desc
+        if isinstance(spec, str):
+            self.spec = cv.format_spec(spec)
+            if desc:
+                self.spec.desc = desc
+        else:
+            self.spec = spec
+        self.fmt = self.spec.fmt
         self.hover = False
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.setFixedHeight(48)
+        self.setFixedHeight(54)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
 
     def enterEvent(self, e):
@@ -483,36 +488,103 @@ class FormatChip(QWidget):
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         r = QRectF(0.5, 0.5, self.width() - 1.0, self.height() - 1.0)
 
+        accent = QColor(self.spec.accent)
         if self.hover:
             p.setBrush(QColor(BG_HOVER))
-            p.setPen(QPen(QColor(ACCENT), 1.3))
+            border_c = QColor(accent)
+            border_c.setAlpha(190)
+            p.setPen(QPen(border_c, 1.3))
         else:
             p.setBrush(QColor(BG_CARD))
             p.setPen(QPen(QColor(BORDER), 1.0))
         p.drawRoundedRect(r, 8.0, 8.0)
 
-        # Format name + subtle arrow on hover
-        f = QFont()
-        f.setPixelSize(12)
-        f.setWeight(QFont.Weight.Bold)
-        p.setFont(f)
+        # 1. Left Icon Badge Box
+        badge_size = 36.0
+        ib = QRectF(9.0, (self.height() - badge_size) / 2.0, badge_size, badge_size)
+        ibg = QColor(accent)
+        ibg.setAlpha(36 if self.hover else 22)
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(ibg)
+        p.drawRoundedRect(ib, 7.0, 7.0)
+
+        # Crisp vector icon drawn in accent colour
+        icons.draw_icon(p, self.spec.icon, ib.center(), 18.0, accent)
+
+        # 2. Format Name + Category Tag Pill
+        text_x = ib.right() + 10.0
+
+        # Title font
+        f_title = QFont()
+        f_title.setPixelSize(12)
+        f_title.setWeight(QFont.Weight.Bold)
+        p.setFont(f_title)
+        fm_title = QFontMetrics(f_title)
+        title_str = self.spec.fmt
+        title_w = fm_title.horizontalAdvance(title_str)
+
         p.setPen(QColor("#FFFFFF" if self.hover else TEXT_PRI))
         p.drawText(
-            QRectF(12.0, 6.0, self.width() - 24.0, 18.0),
+            QRectF(text_x, 8.0, title_w + 4.0, 18.0),
             Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
-            f"→ {self.fmt}" if self.hover else self.fmt,
+            title_str,
         )
 
-        # Technical hint
-        f.setPixelSize(10)
-        f.setWeight(QFont.Weight.Medium)
-        p.setFont(f)
+        # Category Tag Pill beside the format name
+        tag_x = text_x + title_w + 6.0
+        f_tag = QFont()
+        f_tag.setPixelSize(9)
+        f_tag.setWeight(QFont.Weight.Bold)
+        p.setFont(f_tag)
+        fm_tag = QFontMetrics(f_tag)
+        tag_str = self.spec.type_badge
+        tag_tw = fm_tag.horizontalAdvance(tag_str)
+        pill_w = tag_tw + 8.0
+        pill_h = 15.0
+        pill_r = QRectF(tag_x, 9.5, pill_w, pill_h)
+
+        if pill_r.right() < self.width() - 24.0:
+            pill_bg = QColor(accent)
+            pill_bg.setAlpha(34 if self.hover else 20)
+            p.setPen(Qt.PenStyle.NoPen)
+            p.setBrush(pill_bg)
+            p.drawRoundedRect(pill_r, 4.0, 4.0)
+
+            p.setPen(accent)
+            p.drawText(
+                pill_r,
+                Qt.AlignmentFlag.AlignCenter,
+                tag_str,
+            )
+
+        # 3. Description / Technical spec line
+        f_desc = QFont()
+        f_desc.setPixelSize(10)
+        f_desc.setWeight(QFont.Weight.Medium)
+        p.setFont(f_desc)
         p.setPen(QColor("#93C5FD" if self.hover else TEXT_MUTED))
+        desc_text = self.spec.desc
+        fm_desc = QFontMetrics(f_desc)
+        avail_w = self.width() - text_x - 10.0
+        elided = fm_desc.elidedText(desc_text, Qt.TextElideMode.ElideRight, int(avail_w))
         p.drawText(
-            QRectF(12.0, 24.0, self.width() - 16.0, 16.0),
+            QRectF(text_x, 28.0, avail_w, 16.0),
             Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
-            self.desc,
+            elided,
         )
+
+        # 4. Subtle action arrow on hover on the far right
+        if self.hover:
+            f_arrow = QFont()
+            f_arrow.setPixelSize(12)
+            f_arrow.setWeight(QFont.Weight.Bold)
+            p.setFont(f_arrow)
+            p.setPen(accent)
+            p.drawText(
+                QRectF(self.width() - 22.0, 8.0, 14.0, 18.0),
+                Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
+                "→",
+            )
 
 
 # ============================================================ Main Rectangular File Studio Window
@@ -709,14 +781,28 @@ class FileStudioWindow(QWidget):
         self.deck_layout.addWidget(self.tools_grid_wrap)
 
         # Formats Section
+        self.formats_hdr_row = QWidget()
+        fhr = QHBoxLayout(self.formats_hdr_row)
+        fhr.setContentsMargins(0, 0, 0, 0)
+        fhr.setSpacing(8)
+
         self.formats_hdr = QLabel("QUICK CONVERT FORMAT")
         self.formats_hdr.setObjectName("sectionTitle")
-        self.deck_layout.addWidget(self.formats_hdr)
+        fhr.addWidget(self.formats_hdr)
+        fhr.addStretch(1)
+
+        self.format_filter_bar = QWidget()
+        self.format_filter_layout = QHBoxLayout(self.format_filter_bar)
+        self.format_filter_layout.setContentsMargins(0, 0, 0, 0)
+        self.format_filter_layout.setSpacing(5)
+        fhr.addWidget(self.format_filter_bar)
+
+        self.deck_layout.addWidget(self.formats_hdr_row)
 
         self.formats_grid_wrap = QWidget()
         self.formats_grid = QGridLayout(self.formats_grid_wrap)
         self.formats_grid.setContentsMargins(0, 0, 0, 0)
-        self.formats_grid.setHorizontalSpacing(8)
+        self.formats_grid.setHorizontalSpacing(10)
         self.formats_grid.setVerticalSpacing(8)
         self.deck_layout.addWidget(self.formats_grid_wrap)
 
@@ -857,6 +943,47 @@ class FileStudioWindow(QWidget):
                 w.setParent(None)
                 w.deleteLater()
 
+    def _clear_layout(self, layout: QLayout):
+        while layout.count():
+            item = layout.takeAt(0)
+            w = item.widget()
+            if w is not None:
+                w.hide()
+                w.setParent(None)
+                w.deleteLater()
+
+    def _filter_formats(self, cat: str):
+        self._selected_format_cat = cat
+        self._update_filter_button_styles()
+        self._render_format_chips()
+
+    def _update_filter_button_styles(self):
+        for cat_name, btn in getattr(self, "_filter_btns", {}).items():
+            if cat_name == getattr(self, "_selected_format_cat", "ALL"):
+                btn.setStyleSheet(
+                    f"QPushButton {{ background: {ACCENT}; color: #FFFFFF; border: 1px solid {ACCENT}; "
+                    f"border-radius: 10px; padding: 2px 9px; font-size: 10px; font-weight: 700; }}"
+                )
+            else:
+                btn.setStyleSheet(
+                    f"QPushButton {{ background: {BG_ELEV}; color: {TEXT_MUTED}; border: 1px solid {BORDER}; "
+                    f"border-radius: 10px; padding: 2px 9px; font-size: 10px; font-weight: 600; }}"
+                    f"QPushButton:hover {{ background: {BG_HOVER}; color: {TEXT_PRI}; border-color: #3E4556; }}"
+                )
+
+    def _render_format_chips(self):
+        self._clear_grid(self.formats_grid)
+        specs = getattr(self, "_all_format_specs", [])
+        selected = getattr(self, "_selected_format_cat", "ALL")
+        if selected != "ALL":
+            specs = [s for s in specs if s.category_label == selected]
+
+        cols = 2
+        for idx, spec in enumerate(specs):
+            chip = FormatChip(spec)
+            chip.clicked.connect(self._on_format_clicked)
+            self.formats_grid.addWidget(chip, idx // cols, idx % cols)
+
     def _populate_for_paths(self, paths: list[Path]):
         p0 = paths[0]
         prof = cv.inspect_file(p0)
@@ -900,22 +1027,47 @@ class FileStudioWindow(QWidget):
             self.tools_hdr.hide()
             self.tools_grid_wrap.hide()
 
-        # Populate Convert Format Grid (3 columns)
+        # Populate Convert Format Grid (2 columns with format icons, category pills, & filters)
         self._clear_grid(self.formats_grid)
+        self._clear_layout(self.format_filter_layout)
         targets = cv.targets_for(paths)
         if targets:
             hdr = f"CONVERT {prof.badge} TO FORMAT" if cv.common_kind(paths) else "CONVERT TO FORMAT"
             self.formats_hdr.setText(hdr)
-            self.formats_hdr.show()
+            self.formats_hdr_row.show()
             self.formats_grid_wrap.show()
-            cols = 3
-            for idx, fmt in enumerate(targets):
-                desc = cv.FORMAT_META.get(fmt, "Convert")
-                chip = FormatChip(fmt, desc)
-                chip.clicked.connect(self._on_format_clicked)
-                self.formats_grid.addWidget(chip, idx // cols, idx % cols)
+
+            self._all_format_specs = [cv.format_spec(f) for f in targets]
+            self._selected_format_cat = "ALL"
+
+            cat_map: dict[str, list[cv.FormatSpec]] = {}
+            for s in self._all_format_specs:
+                cat_map.setdefault(s.category_label, []).append(s)
+
+            if len(cat_map) > 1:
+                self.format_filter_bar.show()
+                self._filter_btns = {}
+
+                btn_all = QPushButton(f"All ({len(targets)})")
+                btn_all.setCursor(Qt.CursorShape.PointingHandCursor)
+                btn_all.clicked.connect(lambda: self._filter_formats("ALL"))
+                self.format_filter_layout.addWidget(btn_all)
+                self._filter_btns["ALL"] = btn_all
+
+                for cat_name, cat_specs in cat_map.items():
+                    btn_cat = QPushButton(f"{cat_name} ({len(cat_specs)})")
+                    btn_cat.setCursor(Qt.CursorShape.PointingHandCursor)
+                    btn_cat.clicked.connect(lambda checked=False, c=cat_name: self._filter_formats(c))
+                    self.format_filter_layout.addWidget(btn_cat)
+                    self._filter_btns[cat_name] = btn_cat
+
+                self._update_filter_button_styles()
+            else:
+                self.format_filter_bar.hide()
+
+            self._render_format_chips()
         else:
-            self.formats_hdr.hide()
+            self.formats_hdr_row.hide()
             self.formats_grid_wrap.hide()
 
     # ---------------------------------------------------------------- Embedded Studio Navigation

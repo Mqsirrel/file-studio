@@ -208,11 +208,51 @@ def draw_icon(p: QPainter, name: str, center: QPointF, size: float, color: QColo
         p.drawLine(QPointF(0.0, -6.5), QPointF(0.0, 6.5))
         p.drawLine(QPointF(-6.5, 0.0), QPointF(6.5, 0.0))
 
-    elif name in ("kind_pdf", "kind_doc", "kind_sheet", "kind_slide"):
+    elif name == "kind_image":
+        p.drawRoundedRect(QRectF(-8.5, -7.0, 17.0, 14.0), 2.2, 2.2)
+        p.setBrush(color)
+        p.setPen(Qt.PenStyle.NoPen)
+        p.drawEllipse(QPointF(-4.2, -2.5), 1.6, 1.6)
+        mtn = QPainterPath()
+        mtn.moveTo(-6.5, 4.5)
+        mtn.lineTo(-2.2, -0.2)
+        mtn.lineTo(1.2, 2.5)
+        mtn.lineTo(4.2, -0.5)
+        mtn.lineTo(6.5, 4.5)
+        mtn.closeSubpath()
+        p.drawPath(mtn)
+
+    elif name == "kind_pdf":
+        doc = QPainterPath()
+        doc.moveTo(-7.0, -9.0)
+        doc.lineTo(2.0, -9.0)
+        doc.lineTo(7.0, -4.0)
+        doc.lineTo(7.0, 9.0)
+        doc.lineTo(-7.0, 9.0)
+        doc.closeSubpath()
+        p.drawPath(doc)
+        p.drawLine(QPointF(2.0, -9.0), QPointF(2.0, -4.0))
+        p.drawLine(QPointF(2.0, -4.0), QPointF(7.0, -4.0))
+        p.drawLine(QPointF(-3.5, 1.5), QPointF(3.5, 1.5))
+        p.drawLine(QPointF(-3.5, 5.0), QPointF(1.5, 5.0))
+
+    elif name == "kind_doc":
         p.drawRoundedRect(QRectF(-7.0, -9.0, 14.0, 18.0), 2.2, 2.2)
-        p.drawLine(QPointF(-3.5, -3.5), QPointF(3.5, -3.5))
-        p.drawLine(QPointF(-3.5, 0.5), QPointF(3.5, 0.5))
-        p.drawLine(QPointF(-3.5, 4.5), QPointF(1.5, 4.5))
+        p.drawLine(QPointF(-3.5, -4.0), QPointF(3.5, -4.0))
+        p.drawLine(QPointF(-3.5, -0.5), QPointF(3.5, -0.5))
+        p.drawLine(QPointF(-3.5, 3.0), QPointF(3.5, 3.0))
+        p.drawLine(QPointF(-3.5, 6.0), QPointF(1.0, 6.0))
+
+    elif name == "kind_sheet":
+        p.drawRoundedRect(QRectF(-8.0, -8.0, 16.0, 16.0), 2.2, 2.2)
+        p.drawLine(QPointF(-2.0, -8.0), QPointF(-2.0, 8.0))
+        p.drawLine(QPointF(-8.0, -2.5), QPointF(8.0, -2.5))
+        p.drawLine(QPointF(-8.0, 3.0), QPointF(8.0, 3.0))
+
+    elif name == "kind_slide":
+        p.drawRoundedRect(QRectF(-9.0, -7.5, 18.0, 13.0), 2.0, 2.0)
+        p.drawLine(QPointF(0.0, 5.5), QPointF(0.0, 8.5))
+        p.drawLine(QPointF(-4.5, 8.5), QPointF(4.5, 8.5))
 
     elif name == "kind_video":
         p.drawRoundedRect(QRectF(-9.0, -7.0, 18.0, 14.0), 2.5, 2.5)

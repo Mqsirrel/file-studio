@@ -27,6 +27,7 @@ Unlike legacy multi-megabyte shell scripts or slow ImageMagick subprocess wrappe
 - **Obsidian & Cobalt Slate Aesthetic**: Purpose-built for dark desktop environments (`#14161B` surface, `#1C1F26` cards, `#2B303C` 1px borders, `#3B82F6` Cobalt Blue accents, `#10B981` Emerald status badges).
 - **File Intelligence**: The moment you drop or open a file, File Studio probes its exact technical specs (dimensions, colour space, page counts, paper sizes, audio/video codecs, bitrates, archive contents).
 - **Context-Aware Command Deck**: Strictly displays compatible tools and target formats tailored to the probed file kind—never forcing image tools onto videos, PDFs, or archives.
+- **Format Icons & Category Intelligence**: Every format card features a dedicated vector icon, vibrant category badge (`IMG`, `PDF`, `DOC`, `VID`, `AUD`, `ZIP`), technical specification hint, and instant category filter pills (`All`, `Image`, `Document`, etc.) so you can identify and locate formats at a glance.
 - **Embedded Studio Views**: Interactive tools (Crop, Studio Backdrop, Annotate, Redact, Adjust, Metadata) switch seamlessly inline inside the same rectangular window with zero popup clutter.
 - **Batch & Archive Intelligence**: Drag multiple files to combine them instantly into a clean `.zip` archive or batch-convert them.
 - **KDE Dolphin ServiceMenus**: Native right-click context menus in Dolphin filtered strictly by MIME type.
@@ -35,12 +36,12 @@ Unlike legacy multi-megabyte shell scripts or slow ImageMagick subprocess wrappe
 
 ## Screenshots & Feature Tour
 
-### 1. Context-Aware Command Decks
+### 1. Context-Aware Command Decks & Format Icons
 
-| Single Image Inspection | PDF Probing & Tools |
-| :---: | :---: |
-| <img src="screenshots/filestudio_1_image_deck.png" width="400" /> | <img src="screenshots/filestudio_2_pdf_deck.png" width="400" /> |
-| *Live 60×60 thumbnail, dimensions, colour mode, 7 image tools, and 9 target formats with inline WebP conversion savings.* | *Automatic PDF adaptation: page counts, A4 paper size, MuPDF stream compression, and 200 DPI page rendering.* |
+| Single Image & Format Icons | Instant Category Filter (Docs) | PDF Probing & Targets |
+| :---: | :---: | :---: |
+| <img src="screenshots/filestudio_1_image_deck.png" width="260" /> | <img src="screenshots/filestudio_formats_doc_filtered.png" width="260" /> | <img src="screenshots/filestudio_2_pdf_deck.png" width="260" /> |
+| *Vector format icons, type badges (IMG, PDF, DOC), and technical specs.* | *One-click category filter isolates Document exports (PDF, DOCX) instantly.* | *PDF adaptation with page counts, stream compression, and page renders.* |
 
 ### 2. Multi-File Batch & ZIP Packaging
 
