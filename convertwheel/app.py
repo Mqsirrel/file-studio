@@ -923,6 +923,8 @@ class FileStudioWindow(QWidget):
     def collapse(self):
         self.expanded = False
         self.hide()
+        if (not self.dock_pill or not self.dock_pill.isVisible()) and self.busy == 0:
+            QApplication.quit()
 
     def _clear_grid(self, grid: QGridLayout):
         while grid.count():
@@ -1387,7 +1389,7 @@ class EdgeDockPill(QWidget):
         auto = QAction("Start on Login", m, checkable=True, checked=is_autostart_enabled())
         auto.toggled.connect(set_autostart)
         m.addAction(auto)
-        m.addAction("Hide Dock Icon", self.hide)
+        m.addAction("Hide Dock Icon", lambda: (self.settings.setValue("show_dock", False), self.hide()))
         m.addSeparator()
         m.addAction("Quit File Studio", QApplication.quit)
         m.exec(e.globalPos())
@@ -1488,6 +1490,12 @@ def parse_cli_args(argv: list[str]) -> tuple[str | None, str | None, list[str]]:
     i = 0
     while i < len(argv):
         a = argv[i]
+        if a in ("-session", "--session") and i + 1 < len(argv):
+            i += 2
+            continue
+        if a in ("-name", "--name") and i + 1 < len(argv):
+            i += 2
+            continue
         if a == "--to" and i + 1 < len(argv):
             cmd = "to"
             target_fmt = argv[i + 1].upper()
@@ -1514,6 +1522,10 @@ def parse_cli_args(argv: list[str]) -> tuple[str | None, str | None, list[str]]:
 
 
 def main():
+    # If invoked by X11 / KDE session manager restore, exit immediately
+    if any(a.startswith("-session") or a == "-session" for a in sys.argv):
+        return 0
+
     cmd, target_fmt, paths = parse_cli_args(sys.argv[1:])
     payload = json.dumps({"cmd": cmd, "target": target_fmt, "paths": paths})
 
@@ -1537,10 +1549,26 @@ def main():
     app.setWindowIcon(QIcon.fromTheme("applications-graphics"))
     app.setFont(ui_font(12, QFont.Weight.Normal))
 
+    # Disable KDE / X11 session restoration so it never restarts on login
+    try:
+        from PyQt6.QtGui import QSessionManager
+        app.saveStateRequest.connect(lambda sm: sm.setRestartHint(QSessionManager.RestartHint.RestartNever))
+        app.commitDataRequest.connect(lambda sm: sm.setRestartHint(QSessionManager.RestartHint.RestartNever))
+    except Exception:
+        pass
+    if app.isSessionRestored():
+        return 0
+
     dock = EdgeDockPill()
     studio = FileStudioWindow(dock_pill=dock)
     dock.set_studio(studio)
-    dock.show()
+
+    # Do NOT show edge dock pill on boot or launch unless explicitly requested via --dock or settings
+    show_dock = "--dock" in sys.argv or studio.settings.value("show_dock", False, type=bool)
+    if show_dock:
+        dock.show()
+    else:
+        dock.hide()
 
     def dispatch(data_str: str):
         try:
@@ -1588,8 +1616,12 @@ def main():
         conn.disconnected.connect(conn.deleteLater)
 
     server.newConnection.connect(on_conn)
-    if paths:
+    if paths or cmd:
         QTimer.singleShot(120, lambda: dispatch(payload))
+    elif not show_dock:
+        # If launched with no arguments and dock pill is disabled, open file picker directly
+        QTimer.singleShot(120, studio.pick_files)
+
     return app.exec()
 
 
