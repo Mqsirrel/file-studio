@@ -1384,7 +1384,7 @@ class EdgeDockPill(QWidget):
                     lambda: self.studio.expand([self.studio.last_output], interactive=True),
                 )
         m.addSeparator()
-        auto = QAction("Start on Login", m, checkable=True, checked=autostart_path().exists())
+        auto = QAction("Start on Login", m, checkable=True, checked=is_autostart_enabled())
         auto.toggled.connect(set_autostart)
         m.addAction(auto)
         m.addAction("Hide Dock Icon", self.hide)
@@ -1445,6 +1445,21 @@ def autostart_path() -> Path:
     return Path.home() / ".config" / "autostart" / "convertwheel.desktop"
 
 
+def is_autostart_enabled() -> bool:
+    if autostart_path().exists():
+        return True
+    try:
+        res = subprocess.run(
+            ["systemctl", "--user", "is-enabled", "convertwheel.service"],
+            capture_output=True,
+            text=True,
+            timeout=1,
+        )
+        return res.stdout.strip() == "enabled"
+    except Exception:
+        return False
+
+
 def set_autostart(on: bool):
     f = autostart_path()
     if on:
@@ -1455,6 +1470,15 @@ def set_autostart(on: bool):
         )
     else:
         f.unlink(missing_ok=True)
+
+    # Sync systemd user service state if installed
+    svc = Path.home() / ".config" / "systemd" / "user" / "convertwheel.service"
+    if svc.exists():
+        cmd = ["systemctl", "--user", "enable" if on else "disable", "convertwheel.service"]
+        try:
+            subprocess.run(cmd, capture_output=True, text=True, timeout=2)
+        except Exception:
+            pass
 
 
 def parse_cli_args(argv: list[str]) -> tuple[str | None, str | None, list[str]]:
